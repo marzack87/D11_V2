@@ -12,11 +12,11 @@
 #include "HardwareSerial.h"
 #include "math.h"
 
-#include "NewPing.h" 			// ULTRASONIC SENSOR
-#include "DifferencialMotors.h" // DIFFERENTIAL MOTORS
-#include "Buzzer.h" 			// BUZZER
-#include "LED.h" 				// LED
-#include "Radar.h"				// RADAR (SERVO + IR)
+#include "UltrasonicProximitySensor.h" 	// ULTRASONIC SENSOR
+#include "DifferencialMotors.h" 		// DIFFERENTIAL MOTORS
+#include "Buzzer.h" 					// BUZZER
+#include "LED.h" 						// LED
+#include "Radar.h"						// RADAR (SERVO + IR)
 // LINE SENSOR
 
 //end of add your includes here

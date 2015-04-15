@@ -47,7 +47,7 @@ void loop()
 	led_red.setOFF();
 
 	// cerca l'oggetto più grande davanti
-	float big_obj_direction = scan();
+	float big_obj_direction = radar.scan();
 	delay(1000);
 	if (big_obj_direction == -1) {
 
@@ -91,7 +91,7 @@ void go_towards_object(float obj_distance, int obj_direction)
 	float ahead_distance;
 	int stop;
 
-	while (ultrasonic_distance() > TARGET_ACHIEVED && obj_distance > TARGET_ACHIEVED) {
+	while (front_sonar.distance_cm() > TARGET_ACHIEVED && obj_distance > TARGET_ACHIEVED) {
 
 		// controlliamo la distanza di fronte al robot
 		ahead_distance = radar.distanceAtPosition_cm(90);
@@ -205,7 +205,7 @@ void random_move_for(unsigned long milliseconds)
 		} else {
 
 			radar.set_radar_position(90);
-			if (ultrasonic_distance() > SAFE_DISTANCE) {
+			if (front_sonar.distance_cm() > SAFE_DISTANCE) {
 				diff_motors.goForward();
 				delay(250);
 				diff_motors.stop();
@@ -213,182 +213,4 @@ void random_move_for(unsigned long milliseconds)
 			}
 		}
 	}
-}
-
-int ultrasonic_distance()
-{
-  float average;
-  float total = 0;
-
-  int read_per_pos = 5;
-  for(int i = 0; i < read_per_pos; i++) {
-
-    delay(50);
-    int distance = front_sonar.distance_cm();
-    total += distance;
-  }
-
-  average = total / read_per_pos;
-
-  return average;
-}
-
-float scan()
-{
-  float prevDist = 0;
-
-  float begin_dist = 0;
-  float end_dist = 0;
-
-  int firstEdge = 0;
-  float firstEdge_dist = 0;
-  int firstEdge_angle = 0;
-
-  int secondEdge = 0;
-  float secondEdge_dist = 0;
-  int secondEdge_angle = 0;
-
-  float average;
-
-  double obj_dimension = 0;
-  int obj_number = 0;
-
-  float deg = 0;
-  float rad = 0;
-  float angle_direction = 0;
-
-  int big_obj_number = 0;
-  double big_obj_dimension = 0;
-  float big_obj_direction = -1;
-
-  int pos = 0;
-
-  for(pos = 0; pos < 180; pos += 2) {
-
-    average = radar.distanceAtPosition_cm(pos);
-
-    Serial.print("Angolo: ");
-    Serial.print(pos);
-    Serial.print(" Distance: ");
-    Serial.println(average);
-
-    if (pos != 0) {
-      /*
-          Se c'è uno scalino (distanza precendente - distanza attuale)
-          > 10 cm  ---> abbiamo appena incontrato il primo "bordo" di un oggetto
-          > -10 cm ---> abbiamo appena incontrato il secondo "bordo" di un oggetto [l'oggetto è terminato, bisogna calcolarne le dimensioni]
-
-     */
-      if (prevDist - average > 10){
-
-        firstEdge_dist = average;
-        firstEdge_angle = pos;
-
-        firstEdge = 1;
-        Serial.print("################");
-        Serial.print("Trovato primo Spigolo");
-        Serial.println("################");
-
-      }
-
-      if (average - prevDist > 10){
-        if (firstEdge == 1) {
-
-          secondEdge_dist = prevDist;
-          secondEdge_angle = pos-2;
-
-          secondEdge = 1;
-          Serial.println("################");
-          Serial.println("Trovato secondo Spigolo");
-          Serial.println("################");
-
-        }
-      }
-
-      if (firstEdge == 1 && secondEdge == 1){
-
-        deg = secondEdge_angle - firstEdge_angle;
-        rad =  (deg * 71) / 4068;
-
-        angle_direction = (firstEdge_angle + secondEdge_angle) / 2;
-
-        obj_dimension = sqrt( pow(firstEdge_dist, 2) + pow(secondEdge_dist, 2) - 2 * firstEdge_dist * secondEdge_dist * cos( rad ) );
-
-        if (obj_dimension > 3.0){
-
-          obj_number++;
-
-          Serial.println("**************");
-          Serial.print("Oggetto numbero: ");
-          Serial.println(obj_number);
-          Serial.print("Distanza primo bordo: ");
-          Serial.println(firstEdge_dist);
-          Serial.print("Distanza primo bordo: ");
-          Serial.println(firstEdge_dist);
-          Serial.print("Distanza secondo bordo: ");
-          Serial.println(secondEdge_dist);
-          Serial.print("Ampiezza angolo compreso: ");
-          Serial.print(deg);
-          Serial.print(" gradi (");
-          Serial.print(rad);
-          Serial.println(" radianti)");
-          Serial.print("Angolo di direzione: ");
-          Serial.println(angle_direction);
-          Serial.print("Dimensione Oggetto: ");
-          Serial.println(obj_dimension);
-          Serial.println("**************");
-
-          led_green.setON();
-          delay(100);
-          led_green.setOFF();
-
-          buzzer.bip_sound();
-
-          led_green.setOFF();
-          delay(100);
-          led_green.setON();
-
-          if (big_obj_dimension < obj_dimension) {
-            big_obj_dimension = obj_dimension;
-            big_obj_number = obj_number;
-            big_obj_direction = angle_direction;
-          }
-        }
-
-        firstEdge = 0;
-        secondEdge = 0;
-
-      }
-
-    prevDist = average;
-
-    if (pos == 180) {
-
-      end_dist = average;
-
-    }
-
-  } else {
-
-    begin_dist = average;
-    prevDist = average;
-  }
-
- }
-  delay(1000);
-
-  Serial.println("--------------------------------");
-  Serial.println("OBIETTIVO INDIVIDUATO");
-  Serial.print("[ Oggetto : ");
-  Serial.print(big_obj_number);
-  Serial.print(", Diametro : ");
-  Serial.print(big_obj_dimension);
-  Serial.print(", Angolo : ");
-  Serial.println(big_obj_direction);
-  Serial.println(" ]");
-  Serial.println("A MORTE IL CICCIONE!!");
-  Serial.println("--------------------------------");
-
-  return big_obj_direction;
-
 }
