@@ -21,6 +21,19 @@ LED led_red;
 Buzzer buzzer;
 Radar radar;
 UltrasonicProximitySensor front_sonar;
+EventManager evtManager;
+
+struct LEDListener : public EventTask
+{
+  using EventTask::execute;
+
+  void execute(Event evt)
+  {
+    led_green.setON();
+    buzzer.success_sound();
+  }
+
+} LEDListener;
 
 void setup()
 {
@@ -38,12 +51,17 @@ void setup()
   radar.initWithPin(IR_PIN, SERVO_PIN);
 
   front_sonar.initWithPins(TRIGGER_PIN, ECHO_PIN);
+
+  evtManager.subscribe(Subscriber("led.on", &LEDListener));
 }
 
 void loop()
 {
 	led_green.setOFF();
 	led_red.setOFF();
+
+	Event ledEvent("led.on");
+	evtManager.trigger(ledEvent);
 
 	/*
 	// led spenti
