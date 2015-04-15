@@ -42,6 +42,10 @@ void setup()
 
 void loop()
 {
+	led_green.setOFF();
+	led_red.setOFF();
+
+	/*
 	// led spenti
 	led_green.setOFF();
 	led_red.setOFF();
@@ -78,7 +82,7 @@ void loop()
 
 	random_move_for(30000);
 
-	delay(1000);
+	delay(1000);*/
 }
 
 void go_towards_object(float obj_distance, int obj_direction)
