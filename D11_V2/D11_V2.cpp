@@ -23,17 +23,16 @@ Radar radar;
 UltrasonicProximitySensor front_sonar;
 EventManager evtManager;
 
-struct LEDListener : public EventTask
+struct ObjFoundListener : public EventTask
 {
   using EventTask::execute;
 
   void execute(Event evt)
   {
-    led_green.setON();
-    buzzer.success_sound();
+    buzzer.bip_sound();
   }
 
-} LEDListener;
+} ObjFoundListener;
 
 void setup()
 {
@@ -52,16 +51,14 @@ void setup()
 
   front_sonar.initWithPins(TRIGGER_PIN, ECHO_PIN);
 
-  evtManager.subscribe(Subscriber("led.on", &LEDListener));
+  evtManager.subscribe(Subscriber("object_found", &ObjFoundListener));
+
+  radar.addListener(evtManager);
 }
 
 void loop()
 {
-	led_green.setOFF();
-	led_red.setOFF();
-
-	Event ledEvent("led.on");
-	evtManager.trigger(ledEvent);
+	radar.scan();
 
 	/*
 	// led spenti
