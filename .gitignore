@@ -45,3 +45,6 @@ local.properties
 *.launch
 .cproject
 spec.d
+
+# Arduino
+.Release/
