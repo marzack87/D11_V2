@@ -26,3 +26,22 @@
 *.exe
 *.out
 *.app
+
+# Eclipse files
+*.pydevproject
+.metadata
+.gradle
+bin/
+tmp/
+*.tmp
+*.bak
+*.swp
+*~.nib
+local.properties
+.settings/
+.loadpath
+.project
+.externalToolBuilders/
+*.launch
+.cproject
+spec.d
