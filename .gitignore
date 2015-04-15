@@ -43,7 +43,7 @@ local.properties
 #.project
 .externalToolBuilders/
 *.launch
-.cproject
+#.cproject
 spec.d
 
 # Arduino
