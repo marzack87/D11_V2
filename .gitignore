@@ -40,11 +40,13 @@ tmp/
 local.properties
 .settings/
 .loadpath
-#.project
 .externalToolBuilders/
 *.launch
-#.cproject
 spec.d
 
 # Arduino
 Release/
+
+# Eclipse project files (to comment if someone has to import the project into a new workspace)
+.project
+.cproject
