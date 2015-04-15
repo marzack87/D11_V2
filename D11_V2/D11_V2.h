@@ -4,11 +4,20 @@
 // - extern variable definitions
 // In the appropriate section
 
-#ifndef _D11_V2_H_
-#define _D11_V2_H_
+#ifndef D11_V2_H_
+#define D11_V2_H_
 #include "Arduino.h"
 //add your includes for the project D11_V2 here
 
+#include "HardwareSerial.h"
+#include "math.h"
+
+#include "NewPing.h" 			// ULTRASONIC SENSOR
+#include "DifferencialMotors.h" // DIFFERENTIAL MOTORS
+#include "Buzzer.h" 			// BUZZER
+#include "LED.h" 				// LED
+#include "Radar.h"				// RADAR (SERVO + IR)
+// LINE SENSOR
 
 //end of add your includes here
 #ifdef __cplusplus
@@ -20,10 +29,15 @@ void setup();
 } // extern "C"
 #endif
 
-//add your function definitions for the project D11_V2 here
+void go_until_obstacle();
 
+int ultrasonic_distance();
 
+int search_obj(float obj_distance, int last_turn_angle, int wide);
+void set_servo_position(int degree);
+void go_towards_object(float obj_distance, int obj_direction);
+float scan();
 
-
+void random_move_for(unsigned long milliseconds);
 //Do not add code below this line
-#endif /* _D11_V2_H_ */
+#endif /* D11_V2_H_ */
