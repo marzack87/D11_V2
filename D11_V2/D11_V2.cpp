@@ -23,16 +23,16 @@ Radar radar;
 UltrasonicProximitySensor front_sonar;
 EventManager evtManager;
 
-struct ObjFoundListener : public EventTask
+struct ObjFoundObserver : public EventTask
 {
   using EventTask::execute;
 
   void execute(Event evt)
   {
-    buzzer.bip_sound();
+    buzzer.success_sound();
   }
 
-} ObjFoundListener;
+} ObjFoundObserver;
 
 void setup()
 {
@@ -51,9 +51,9 @@ void setup()
 
   front_sonar.initWithPins(TRIGGER_PIN, ECHO_PIN);
 
-  evtManager.subscribe(Subscriber("object_found", &ObjFoundListener));
+  evtManager.subscribe(Subscriber("object_found", &ObjFoundObserver));
 
-  radar.addListener(evtManager);
+  radar.addObserver(evtManager);
 }
 
 void loop()
