@@ -9,11 +9,20 @@
 #define GREEN_LED_PIN 2
 #define RED_LED_PIN 10
 
-#define SAFE_DISTANCE 25
 #define ACCEPTED_ERROR 5
 #define TARGET_ACHIEVED 10
+#define SAFE_DISTANCE 20
+#define MAX_OBJECTS 10
 
 extern HardwareSerial Serial;
+
+struct Object
+{
+	Object() : direction(NULL), dimension(NULL) {}
+	Object(float dir, float dim) : direction(dir), dimension(dim) {}
+	float direction;
+	float dimension;
+};
 
 DifferencialMotors diff_motors;
 LED led_green;
@@ -22,17 +31,42 @@ Buzzer buzzer;
 Radar radar;
 UltrasonicProximitySensor front_sonar;
 EventManager evtManager;
+Object founded_object[MAX_OBJECTS];
+int obj_founded_number = 0;
 
-struct ObjFoundObserver : public EventTask
+struct EvObjectObserver : public EventTask
 {
   using EventTask::execute;
 
   void execute(Event evt)
   {
-    buzzer.success_sound();
+	  if (obj_founded_number < MAX_OBJECTS - 1) {
+		  String obj_info = evt.extra;
+		  int delimeter = obj_info.indexOf("-");
+		  String dir = obj_info.substring(0, delimeter);
+		  String dim = obj_info.substring(delimeter+1);
+
+		  Serial.println(obj_info);
+
+		  char dir_array[dir.length() + 1]; //determine size of the array
+		  dir.toCharArray(dir_array, sizeof(dir_array)); //put readStringinto an array
+		  float direction = atof(dir_array);
+
+		  char dim_array[dim.length() + 1]; //determine size of the array
+		  dir.toCharArray(dim_array, sizeof(dim_array)); //put readStringinto an array
+		  float dimesion = atof(dim_array);
+
+		  Object obj(direction, dimesion);
+		  founded_object[obj_founded_number] = obj;
+		  obj_founded_number++;
+		  buzzer.bip_sound();
+	  } else {
+		  buzzer.warning_sound();
+	  }
+
   }
 
-} ObjFoundObserver;
+} EvObjectObserver;
 
 void setup()
 {
@@ -51,7 +85,7 @@ void setup()
 
   front_sonar.initWithPins(TRIGGER_PIN, ECHO_PIN);
 
-  evtManager.subscribe(Subscriber("object_found", &ObjFoundObserver));
+  evtManager.subscribe(Subscriber("object", &EvObjectObserver));
 
   radar.addObserver(evtManager);
 }
@@ -60,7 +94,6 @@ void loop()
 {
 	radar.scan();
 
-	/*
 	// led spenti
 	led_green.setOFF();
 	led_red.setOFF();
@@ -76,14 +109,22 @@ void loop()
 		buzzer.fail_sound();
 
 	} else {
-		// è stato trovato l'oggetto
+		// sono stati trovati degli oggetti
 		led_green.setON();
 
+		// valutiamo quale è l'oggetto più grande
+		Object biggest_obj = founded_object[0];
+		for (int i = 1; i <= obj_founded_number; i++){
+			if (biggest_obj.dimension < founded_object[i].dimension){
+				biggest_obj = founded_object[i];
+			}
+		}
+
 		// puntiamo l'oggetto
-		float big_obj_distance = radar.distanceAtPosition_cm(big_obj_direction);
+		float big_obj_distance = radar.distanceAtPosition_cm((int)biggest_obj.direction);
 
 		// andiamo verso l'oggetto
-		go_towards_object(big_obj_distance, big_obj_direction);
+		go_towards_object(big_obj_distance, biggest_obj.direction);
 
 		// festeggia!
 		buzzer.success_sound();
@@ -97,7 +138,7 @@ void loop()
 
 	random_move_for(30000);
 
-	delay(1000);*/
+	delay(1000);
 }
 
 void go_towards_object(float obj_distance, int obj_direction)
@@ -164,9 +205,7 @@ void go_towards_object(float obj_distance, int obj_direction)
 			// andiamo in avanti
 			turn_angle = 0;
 			Serial.println("Avanti tutta!");
-			diff_motors.goForward();
-			delay(200);
-			diff_motors.stop();
+			diff_motors.goForwardUntilTimeoutOrObstacle(250, front_sonar, SAFE_DISTANCE);
 		}
 	}
 	diff_motors.stop();
@@ -225,10 +264,7 @@ void random_move_for(unsigned long milliseconds)
 
 			radar.set_radar_position(90);
 			if (front_sonar.distance_cm() > SAFE_DISTANCE) {
-				diff_motors.goForward();
-				delay(250);
-				diff_motors.stop();
-				delay(300);
+				diff_motors.goForwardUntilTimeoutOrObstacle(250, front_sonar, SAFE_DISTANCE);
 			}
 		}
 	}
