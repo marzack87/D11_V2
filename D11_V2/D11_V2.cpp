@@ -40,13 +40,19 @@ struct EvObjectObserver : public EventTask
 
   void execute(Event evt)
   {
+	  Serial.println("Evento Arrivato");
+
 	  if (obj_founded_number < MAX_OBJECTS - 1) {
-		  String obj_info = evt.extra;
+		  Serial.println("Leggo evento...");
+		  String obj_info = (String)evt.extra;
 		  int delimeter = obj_info.indexOf("-");
 		  String dir = obj_info.substring(0, delimeter);
 		  String dim = obj_info.substring(delimeter+1);
 
-		  Serial.println(obj_info);
+		  Serial.print("Direzione: ");
+		  Serial.println(dir);
+		  Serial.print("Dimensione: ");
+		  Serial.println(dim);
 
 		  char dir_array[dir.length() + 1]; //determine size of the array
 		  dir.toCharArray(dir_array, sizeof(dir_array)); //put readStringinto an array
@@ -54,12 +60,13 @@ struct EvObjectObserver : public EventTask
 
 		  char dim_array[dim.length() + 1]; //determine size of the array
 		  dir.toCharArray(dim_array, sizeof(dim_array)); //put readStringinto an array
-		  float dimesion = atof(dim_array);
+		  float dimension = atof(dim_array);
 
-		  Object obj(direction, dimesion);
+		  Object obj(direction, dimension);
 		  founded_object[obj_founded_number] = obj;
 		  obj_founded_number++;
 		  buzzer.bip_sound();
+		  Serial.println("Fine Evento");
 	  } else {
 		  buzzer.warning_sound();
 	  }
