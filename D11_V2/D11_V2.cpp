@@ -10,9 +10,11 @@
 #define RED_LED_PIN 10
 
 #define ACCEPTED_ERROR 5
-#define TARGET_ACHIEVED 10
+#define TARGET_ACHIEVED 15
 #define SAFE_DISTANCE 20
 #define MAX_OBJECTS 10
+
+#define DEBUG 1
 
 extern HardwareSerial Serial;
 
@@ -23,57 +25,95 @@ struct Object
 	float direction;
 	float dimension;
 };
-
+// Sensors components
 DifferencialMotors diff_motors;
 LED led_green;
 LED led_red;
 Buzzer buzzer;
 Radar radar;
-UltrasonicProximitySensor front_sonar;
+UltrasonicProximitySensor sonar;
+
+// Concurrency & Communication
+Thread sonarThread = Thread();
+
 EventManager evtManager;
-Object founded_object[MAX_OBJECTS];
-int obj_founded_number = 0;
+Event ev_obstacle("obstacle_detected");
 
-struct EvObjectObserver : public EventTask
+// Useful stuff
+Object biggest_object;
+boolean objects_founded = false;
+Status current_status;
+
+struct EvObjectFoundedObserver : public EventTask
 {
-  using EventTask::execute;
+	using EventTask::execute;
 
-  void execute(Event evt)
-  {
-	  Serial.println("Evento Arrivato");
+	void execute(Event evt)
+	{
+		buzzer.bip_sound();
+		led_green.blink();
 
-	  if (obj_founded_number < MAX_OBJECTS - 1) {
-		  Serial.println("Leggo evento...");
-		  String obj_info = (String)evt.extra;
-		  int delimeter = obj_info.indexOf("-");
-		  String dir = obj_info.substring(0, delimeter);
-		  String dim = obj_info.substring(delimeter+1);
+		String obj_info = (String)evt.extra;
 
-		  Serial.print("Direzione: ");
-		  Serial.println(dir);
-		  Serial.print("Dimensione: ");
-		  Serial.println(dim);
+		int delimeter = obj_info.indexOf("-");
+		String dir = obj_info.substring(0, delimeter);
+		String dim = obj_info.substring(delimeter+1);
 
-		  char dir_array[dir.length() + 1]; //determine size of the array
-		  dir.toCharArray(dir_array, sizeof(dir_array)); //put readStringinto an array
-		  float direction = atof(dir_array);
+		char dir_array[dir.length() + 1]; //determine size of the array
+		dir.toCharArray(dir_array, sizeof(dir_array)); //put readStringinto an array
+		float direction = atof(dir_array);
 
-		  char dim_array[dim.length() + 1]; //determine size of the array
-		  dir.toCharArray(dim_array, sizeof(dim_array)); //put readStringinto an array
-		  float dimension = atof(dim_array);
+		char dim_array[dim.length() + 1]; //determine size of the array
+		dim.toCharArray(dim_array, sizeof(dim_array)); //put readStringinto an array
+		float dimension = atof(dim_array);
 
-		  Object obj(direction, dimension);
-		  founded_object[obj_founded_number] = obj;
-		  obj_founded_number++;
-		  buzzer.bip_sound();
-		  Serial.println("Fine Evento");
-	  } else {
-		  buzzer.warning_sound();
-	  }
+		if (objects_founded) {
+		  if (biggest_object.dimension > dimension) {
+			  return;
+		  }
+		}
 
-  }
+		objects_founded = true;
+		biggest_object = Object(direction, dimension);
 
-} EvObjectObserver;
+	}
+
+} EvObjectFoundedObserver;
+
+struct EvObstacleDetectedObserver : public EventTask
+{
+	using EventTask::execute;
+
+	void execute(Event evt)
+	{
+		sonarThread.enabled = false; // mettiamo in pausa il thread del sonar
+
+		buzzer.warning_sound();
+		led_red.blink();
+
+		if (current_status == scanning_objects) {
+			// bisogna mettere in pausa lo scan
+		} else if (current_status == reaching_biggest_object) {
+			// bisogna controllare se è un semplice ostacolo oppure l'oggetto che stiamo cercando
+			// se è un ostacolo --> boh...ci giriamo? stiamo fermi in attesa che si tolga da solo?
+			// se è l'oggetto --> bisboccia!
+		} else if (current_status == random_movement) {
+			// bisogna controllare da che parte è possibile girarsi
+		}
+
+		sonarThread.enabled = true; // riattiviamo il thread del sonar
+	}
+
+} EvObstacleDetectedObserver;
+
+void sonarThreadCallback(){
+	if (sonarThread.shouldRun()){
+		if (sonar.distance_cm() < SAFE_DISTANCE){
+			evtManager.trigger(ev_obstacle);
+		}
+	}
+
+}
 
 void setup()
 {
@@ -90,25 +130,30 @@ void setup()
 
   radar.initWithPin(IR_PIN, SERVO_PIN);
 
-  front_sonar.initWithPins(TRIGGER_PIN, ECHO_PIN);
+  sonar.initWithPins(TRIGGER_PIN, ECHO_PIN);
 
-  evtManager.subscribe(Subscriber("object", &EvObjectObserver));
-
+  evtManager.subscribe(Subscriber("object_founded", &EvObjectFoundedObserver));
   radar.addObserver(evtManager);
+
+  evtManager.subscribe(Subscriber("obstacle_detected", &EvObstacleDetectedObserver));
+  sonarThread.onRun(sonarThreadCallback);
+  sonarThread.setInterval(50);
 }
 
 void loop()
 {
-	radar.scan();
+	sonarThread.run();
 
 	// led spenti
 	led_green.setOFF();
 	led_red.setOFF();
 
+	current_status = scanning_objects;
+
 	// cerca l'oggetto più grande davanti
-	float big_obj_direction = radar.scan();
-	delay(1000);
-	if (big_obj_direction == -1) {
+	radar.scan();
+
+	if (objects_founded) {
 
 		// non è stato trovato alcun oggetto
 		led_red.setON();
@@ -116,22 +161,17 @@ void loop()
 		buzzer.fail_sound();
 
 	} else {
+
+		current_status = reaching_biggest_object;
+
 		// sono stati trovati degli oggetti
 		led_green.setON();
 
-		// valutiamo quale è l'oggetto più grande
-		Object biggest_obj = founded_object[0];
-		for (int i = 1; i <= obj_founded_number; i++){
-			if (biggest_obj.dimension < founded_object[i].dimension){
-				biggest_obj = founded_object[i];
-			}
-		}
-
 		// puntiamo l'oggetto
-		float big_obj_distance = radar.distanceAtPosition_cm((int)biggest_obj.direction);
+		float big_obj_distance = radar.distanceAtPosition_cm((int)biggest_object.direction);
 
 		// andiamo verso l'oggetto
-		go_towards_object(big_obj_distance, biggest_obj.direction);
+		go_towards_object(big_obj_distance, biggest_object.direction);
 
 		// festeggia!
 		buzzer.success_sound();
@@ -142,6 +182,8 @@ void loop()
 
 	led_red.setON();
 	// muoviti a caso per un po' di passi (evitando gli ostacoli) per poi fare una nuova scansione
+
+	current_status = random_movement;
 
 	random_move_for(30000);
 
@@ -158,13 +200,15 @@ void go_towards_object(float obj_distance, int obj_direction)
 	float ahead_distance;
 	int stop;
 
-	while (front_sonar.distance_cm() > TARGET_ACHIEVED && obj_distance > TARGET_ACHIEVED) {
+	while (sonar.distance_cm() > TARGET_ACHIEVED && obj_distance > TARGET_ACHIEVED) {
 
 		// controlliamo la distanza di fronte al robot
 		ahead_distance = radar.distanceAtPosition_cm(90);
 
-		Serial.print("Distanza di fronte al robot: ");
-		Serial.println(ahead_distance);
+#ifdef DEBUG
+			Serial.print("Distanza di fronte al robot: ");
+			Serial.println(ahead_distance);
+#endif
 
 		float temp_distance;
 		stop = 0;
@@ -185,6 +229,8 @@ void go_towards_object(float obj_distance, int obj_direction)
 			 */
 			turn_angle = search_obj(obj_distance, turn_angle/2, 15);
 
+			buzzer.bip_sound();
+
 			// aggiorniamo la distanza dell'oggetto
 			temp_distance = radar.distanceAtPosition_cm(90 - turn_angle);
 			if (temp_distance < obj_distance + ACCEPTED_ERROR) obj_distance = temp_distance;
@@ -195,15 +241,19 @@ void go_towards_object(float obj_distance, int obj_direction)
 				turn_angle *= 1.5;
 			}
 			diff_motors.turn(turn_angle);
+
+#ifdef DEBUG
 			Serial.print(".Ho girato di: ");
 			Serial.println(turn_angle);
-			delay(500);
-
+#endif
 			// controlliamo la distanza davanti a noi
 			ahead_distance = radar.distanceAtPosition_cm(90);
 
+
+#ifdef DEBUG
 			Serial.print(".Distanza di fronte al robot: ");
 			Serial.println(ahead_distance);
+#endif
 
 			if (stop == 1) break;
 		}
@@ -211,8 +261,13 @@ void go_towards_object(float obj_distance, int obj_direction)
 		if (obj_distance > TARGET_ACHIEVED){
 			// andiamo in avanti
 			turn_angle = 0;
-			Serial.println("Avanti tutta!");
-			diff_motors.goForwardUntilTimeoutOrObstacle(250, front_sonar, SAFE_DISTANCE);
+#ifdef DEBUG
+			Serial.print("Avanti tutta!");
+#endif
+			buzzer.bip_sound();
+			buzzer.warning_sound();
+			buzzer.bip_sound();
+			diff_motors.goForwardUntilTimeoutOrObstacle(250, sonar, SAFE_DISTANCE);
 		}
 	}
 	diff_motors.stop();
@@ -228,6 +283,8 @@ int search_obj(float obj_distance, int estimated_direction, int wide)
 	 * direzione in cui dovrebbe esserci l'oggetto
 	 *
 	 */
+
+	buzzer.warning_sound();
 
 	int start = 0;
 	int end = 0;
@@ -263,15 +320,15 @@ void random_move_for(unsigned long milliseconds)
 			int angle = 90 * choice;
 
 			distance = radar.distanceAtPosition_cm(90 - angle);
-			delay(100);
+
 			if (distance > SAFE_DISTANCE){
 				diff_motors.turn(angle);
 			}
 		} else {
 
 			radar.set_radar_position(90);
-			if (front_sonar.distance_cm() > SAFE_DISTANCE) {
-				diff_motors.goForwardUntilTimeoutOrObstacle(250, front_sonar, SAFE_DISTANCE);
+			if (sonar.distance_cm() > SAFE_DISTANCE) {
+				diff_motors.goForwardUntilTimeoutOrObstacle(250, sonar, SAFE_DISTANCE);
 			}
 		}
 	}

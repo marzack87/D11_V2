@@ -17,8 +17,10 @@
 #include "Buzzer.h" 					// BUZZER
 #include "LED.h" 						// LED
 #include "Radar.h"						// RADAR (SERVO + IR)
-#include "Event.h"
-// LINE SENSOR
+
+#include "Event.h"						// ARDUINO EVENTS
+#include "Thread.h"						// ARDUINO THREADS
+#include "ThreadController.h"			// ARDUINO THREADS CONTROLLER
 
 //end of add your includes here
 #ifdef __cplusplus
@@ -29,6 +31,12 @@ void setup();
 #ifdef __cplusplus
 } // extern "C"
 #endif
+
+enum Status {
+	scanning_objects,
+	reaching_biggest_object,
+	random_movement
+};
 
 void go_until_obstacle();
 

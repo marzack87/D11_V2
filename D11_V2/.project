@@ -27,6 +27,16 @@
 	</natures>
 	<linkedResources>
 		<link>
+			<name>Libraries/ArduinoEvent</name>
+			<type>2</type>
+			<locationURI>ArduinoPivateLibPath/ArduinoEvent</locationURI>
+		</link>
+		<link>
+			<name>Libraries/ArduinoThread</name>
+			<type>2</type>
+			<locationURI>ArduinoPivateLibPath/ArduinoThread</locationURI>
+		</link>
+		<link>
 			<name>Libraries/Buzzer</name>
 			<type>2</type>
 			<locationURI>ArduinoPivateLibPath/Buzzer</locationURI>
