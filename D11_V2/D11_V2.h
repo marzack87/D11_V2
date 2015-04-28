@@ -19,11 +19,7 @@
 #include "Radar.h"						// RADAR (SERVO + IR)
 
 #include "Event.h"						// ARDUINO EVENTS
-#include "Thread.h"						// ARDUINO THREADS
-#include "ThreadController.h"			// ARDUINO THREADS CONTROLLER
 #include "TimerOne.h"
-
-#include "ServoTimer2.h"
 
 //end of add your includes here
 #ifdef __cplusplus

@@ -3,7 +3,7 @@
 
 #define ECHO_PIN 4
 #define TRIGGER_PIN 3
-#define SERVO_PIN 5
+#define SERVO_PIN 11
 #define IR_PIN 0
 #define MELODY_PIN 9
 #define GREEN_LED_PIN 2
@@ -26,27 +26,6 @@ struct Object
 	float dimension;
 };
 
-class SonarThread: public Thread
-{
-public:
-	int value;
-	int pin;
-	UltrasonicProximitySensor t_sonar;
-
-	void init(int trigger, int echo){
-		t_sonar.initWithPins(trigger, echo);
-	}
-	// No, "run" cannot be anything...
-	// Because Thread uses the method "run" to run threads,
-	// we MUST overload this method here. using anything other
-	// than "run" will not work properly...
-	void run(){
-		// Reads the analog pin, and saves it localy
-		Serial.println(t_sonar.distance_cm());
-		runned();
-	}
-};
-
 // Sensors components
 DifferencialMotors diff_motors;
 LED led_green;
@@ -57,19 +36,16 @@ UltrasonicProximitySensor sonar;
 
 // Events Handler
 EventManager evtManager;
-Event ev_obstacle("obstacle_detected");
 
-SonarThread sonarThread = SonarThread();
+Event ev_obstacle("obstacle_detected");
 
 // Useful stuff
 Object biggest_object;
-boolean objects_founded = false;
+boolean objects_found = false;
 Status current_status;
+int obstacle_detected_time = 0;
 
-// TEST
-ServoTimer2 servo;
-
-struct EvObjectFoundedObserver : public EventTask
+struct EvObjectFoundObserver : public EventTask
 {
 	using EventTask::execute;
 
@@ -92,18 +68,18 @@ struct EvObjectFoundedObserver : public EventTask
 		dim.toCharArray(dim_array, sizeof(dim_array)); //put readStringinto an array
 		float dimension = atof(dim_array);
 
-		if (objects_founded) {
+		if (objects_found) {
 		  if (biggest_object.dimension > dimension) {
 			  return;
 		  }
 		}
 
-		objects_founded = true;
+		objects_found = true;
 		biggest_object = Object(direction, dimension);
 
 	}
 
-} EvObjectFoundedObserver;
+} EvObjectFoundObserver;
 
 struct EvObstacleDetectedObserver : public EventTask
 {
@@ -111,13 +87,21 @@ struct EvObstacleDetectedObserver : public EventTask
 
 	void execute(Event evt)
 	{
-		Timer1.stop();
-
-		buzzer.warning_sound();
 		led_red.blink();
 
+		if (obstacle_detected_time == 0) obstacle_detected_time = millis();
+
 		if (current_status == scanning_objects) {
-			// bisogna mettere in pausa lo scan
+			/* 	Quando c'è un ostacolo il flusso di controllo non torna al Radar, quindi lo scan
+			 * 	rimane in pausa. Se l'ostacolo rimane per più di 10 secondi, si abortisce lo scan
+			 * 	e ci si muove a caso per cercare di trovare una posizione migliore
+			 */
+			if (millis() - obstacle_detected_time > 10000){
+				radar.abort_scan();
+				radar.set_position(90);
+				objects_found = false;
+				buzzer.warning_sound();
+			}
 		} else if (current_status == reaching_biggest_object) {
 			// bisogna controllare se è un semplice ostacolo oppure l'oggetto che stiamo cercando
 			// se è un ostacolo --> boh...ci giriamo? stiamo fermi in attesa che si tolga da solo?
@@ -125,24 +109,27 @@ struct EvObstacleDetectedObserver : public EventTask
 		} else if (current_status == random_movement) {
 			// bisogna controllare da che parte è possibile girarsi
 		}
-
-		Timer1.restart();
 	}
 
 } EvObstacleDetectedObserver;
 
 void checkObstacles(){
 	sei();
+
 	if (sonar.distance_cm() < SAFE_DISTANCE) {
+		Timer1.stop();
 		evtManager.trigger(ev_obstacle);
+		Timer1.restart();
+	} else {
+		obstacle_detected_time = 0;
 	}
 }
 
 void setup()
 {
 	Serial.begin(9600);
-/*
-	diff_motors.setLeftMotorPins(11, 12, 13);
+
+	diff_motors.setLeftMotorPins(5, 12, 13);
 	diff_motors.setRightMotorPins(6, 7, 8);
 	diff_motors.setBackwheelType(chair_caster_wheel);
 
@@ -155,32 +142,18 @@ void setup()
 
 	sonar.initWithPins(TRIGGER_PIN, ECHO_PIN);
 
-	evtManager.subscribe(Subscriber("object_founded", &EvObjectFoundedObserver));
+	evtManager.subscribe(Subscriber("object_found", &EvObjectFoundObserver));
 	radar.addObserver(evtManager);
-*/
+
 	evtManager.subscribe(Subscriber("obstacle_detected", &EvObstacleDetectedObserver));
 
 	Timer1.initialize(150000); // 150000 = 0.15 seconds
 	Timer1.attachInterrupt(checkObstacles); // checkObstacles to run every 0.15 seconds
-
-	buzzer.setPin(MELODY_PIN);
-	servo.attach(SERVO_PIN);
-	sonar.initWithPins(TRIGGER_PIN, ECHO_PIN);
-	led_green.setPin(GREEN_LED_PIN);
 }
 
 void loop()
 {
-	servo.write(0);
-	led_green.blink();
-	delay(1000);
-	servo.write(90);
-	led_green.blink();
-	delay(1000);
-	servo.write(180);
-	led_green.blink();
-	delay(1000);
-/*
+
 	// led spenti
 	led_green.setOFF();
 	led_red.setOFF();
@@ -190,14 +163,7 @@ void loop()
 
 	radar.scan();
 
-	if (objects_founded) {
-
-		// non è stato trovato alcun oggetto
-		led_red.setON();
-
-		buzzer.fail_sound();
-
-	} else {
+	if (objects_found) {
 
 		current_status = reaching_biggest_object;
 
@@ -215,6 +181,13 @@ void loop()
 
 		led_green.setOFF();
 
+	} else {
+
+		// non è stato trovato alcun oggetto
+		led_red.setON();
+
+		buzzer.fail_sound();
+
 	}
 
 	led_red.setON();
@@ -225,7 +198,7 @@ void loop()
 	random_move_for(30000);
 
 	delay(1000);
-*/
+
 }
 
 void go_towards_object(float obj_distance, int obj_direction)
@@ -364,7 +337,7 @@ void random_move_for(unsigned long milliseconds)
 			}
 		} else {
 
-			radar.set_radar_position(90);
+			radar.set_position(90);
 			if (sonar.distance_cm() > SAFE_DISTANCE) {
 				diff_motors.goForwardUntilTimeoutOrObstacle(250, sonar, SAFE_DISTANCE);
 			}
