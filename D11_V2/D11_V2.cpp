@@ -25,6 +25,28 @@ struct Object
 	float direction;
 	float dimension;
 };
+
+class SonarThread: public Thread
+{
+public:
+	int value;
+	int pin;
+	UltrasonicProximitySensor t_sonar;
+
+	void init(int trigger, int echo){
+		t_sonar.initWithPins(trigger, echo);
+	}
+	// No, "run" cannot be anything...
+	// Because Thread uses the method "run" to run threads,
+	// we MUST overload this method here. using anything other
+	// than "run" will not work properly...
+	void run(){
+		// Reads the analog pin, and saves it localy
+		Serial.println(t_sonar.distance_cm());
+		runned();
+	}
+};
+
 // Sensors components
 DifferencialMotors diff_motors;
 LED led_green;
@@ -33,16 +55,19 @@ Buzzer buzzer;
 Radar radar;
 UltrasonicProximitySensor sonar;
 
-// Concurrency & Communication
-Thread sonarThread = Thread();
-
+// Events Handler
 EventManager evtManager;
 Event ev_obstacle("obstacle_detected");
+
+SonarThread sonarThread = SonarThread();
 
 // Useful stuff
 Object biggest_object;
 boolean objects_founded = false;
 Status current_status;
+
+// TEST
+ServoTimer2 servo;
 
 struct EvObjectFoundedObserver : public EventTask
 {
@@ -86,7 +111,7 @@ struct EvObstacleDetectedObserver : public EventTask
 
 	void execute(Event evt)
 	{
-		sonarThread.enabled = false; // mettiamo in pausa il thread del sonar
+		Timer1.stop();
 
 		buzzer.warning_sound();
 		led_red.blink();
@@ -101,56 +126,68 @@ struct EvObstacleDetectedObserver : public EventTask
 			// bisogna controllare da che parte è possibile girarsi
 		}
 
-		sonarThread.enabled = true; // riattiviamo il thread del sonar
+		Timer1.restart();
 	}
 
 } EvObstacleDetectedObserver;
 
-void sonarThreadCallback(){
-	if (sonarThread.shouldRun()){
-		if (sonar.distance_cm() < SAFE_DISTANCE){
-			evtManager.trigger(ev_obstacle);
-		}
+void checkObstacles(){
+	sei();
+	if (sonar.distance_cm() < SAFE_DISTANCE) {
+		evtManager.trigger(ev_obstacle);
 	}
-
 }
 
 void setup()
 {
-  Serial.begin(9600);
+	Serial.begin(9600);
+/*
+	diff_motors.setLeftMotorPins(11, 12, 13);
+	diff_motors.setRightMotorPins(6, 7, 8);
+	diff_motors.setBackwheelType(chair_caster_wheel);
 
-  diff_motors.setLeftMotorPins(11, 12, 13);
-  diff_motors.setRightMotorPins(6, 7, 8);
-  diff_motors.setBackwheelType(chair_caster_wheel);
+	led_green.setPin(GREEN_LED_PIN);
+	led_red.setPin(RED_LED_PIN);
 
-  led_green.setPin(GREEN_LED_PIN);
-  led_red.setPin(RED_LED_PIN);
+	buzzer.setPin(MELODY_PIN);
 
-  buzzer.setPin(MELODY_PIN);
+	radar.initWithPin(IR_PIN, SERVO_PIN);
 
-  radar.initWithPin(IR_PIN, SERVO_PIN);
+	sonar.initWithPins(TRIGGER_PIN, ECHO_PIN);
 
-  sonar.initWithPins(TRIGGER_PIN, ECHO_PIN);
+	evtManager.subscribe(Subscriber("object_founded", &EvObjectFoundedObserver));
+	radar.addObserver(evtManager);
+*/
+	evtManager.subscribe(Subscriber("obstacle_detected", &EvObstacleDetectedObserver));
 
-  evtManager.subscribe(Subscriber("object_founded", &EvObjectFoundedObserver));
-  radar.addObserver(evtManager);
+	Timer1.initialize(150000); // 150000 = 0.15 seconds
+	Timer1.attachInterrupt(checkObstacles); // checkObstacles to run every 0.15 seconds
 
-  evtManager.subscribe(Subscriber("obstacle_detected", &EvObstacleDetectedObserver));
-  sonarThread.onRun(sonarThreadCallback);
-  sonarThread.setInterval(50);
+	buzzer.setPin(MELODY_PIN);
+	servo.attach(SERVO_PIN);
+	sonar.initWithPins(TRIGGER_PIN, ECHO_PIN);
+	led_green.setPin(GREEN_LED_PIN);
 }
 
 void loop()
 {
-	sonarThread.run();
-
+	servo.write(0);
+	led_green.blink();
+	delay(1000);
+	servo.write(90);
+	led_green.blink();
+	delay(1000);
+	servo.write(180);
+	led_green.blink();
+	delay(1000);
+/*
 	// led spenti
 	led_green.setOFF();
 	led_red.setOFF();
 
 	current_status = scanning_objects;
-
 	// cerca l'oggetto più grande davanti
+
 	radar.scan();
 
 	if (objects_founded) {
@@ -188,6 +225,7 @@ void loop()
 	random_move_for(30000);
 
 	delay(1000);
+*/
 }
 
 void go_towards_object(float obj_distance, int obj_direction)

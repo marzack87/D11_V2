@@ -72,9 +72,14 @@
 			<locationURI>ArduinoPivateLibPath/Radar</locationURI>
 		</link>
 		<link>
-			<name>Libraries/Servo</name>
+			<name>Libraries/ServoTimer2</name>
 			<type>2</type>
-			<locationURI>ArduinoHardwareLibPath/Servo</locationURI>
+			<locationURI>ArduinoPivateLibPath/ServoTimer2</locationURI>
+		</link>
+		<link>
+			<name>Libraries/TimerOne</name>
+			<type>2</type>
+			<locationURI>ArduinoPivateLibPath/TimerOne</locationURI>
 		</link>
 		<link>
 			<name>Libraries/UltrasonicProximitySensor</name>
