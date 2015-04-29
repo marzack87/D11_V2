@@ -34,6 +34,7 @@
 									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/D11_V2/Libraries/ArduinoThread}&quot;"/>
 									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/D11_V2/Libraries/TimerOne}&quot;"/>
 									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/D11_V2/Libraries/ServoTimer2}&quot;"/>
+									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/D11_V2/Libraries/ProactiveSonar}&quot;"/>
 								</option>
 								<inputType id="it.baeyens.arduino.compiler.cpp.sketch.input.1068225918" name="CPP source files" superClass="it.baeyens.arduino.compiler.cpp.sketch.input"/>
 							</tool>
@@ -54,6 +55,7 @@
 									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/D11_V2/Libraries/ArduinoThread}&quot;"/>
 									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/D11_V2/Libraries/TimerOne}&quot;"/>
 									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/D11_V2/Libraries/ServoTimer2}&quot;"/>
+									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/D11_V2/Libraries/ProactiveSonar}&quot;"/>
 								</option>
 								<inputType id="it.baeyens.arduino.compiler.c.sketch.input.1248209784" name="C Source Files" superClass="it.baeyens.arduino.compiler.c.sketch.input"/>
 							</tool>

@@ -10,8 +10,8 @@
 #define RED_LED_PIN 10
 
 #define ACCEPTED_ERROR 5
-#define TARGET_ACHIEVED 15
-#define SAFE_DISTANCE 20
+#define TARGET_ACHIEVED 20
+#define SAFE_DISTANCE 15
 #define MAX_OBJECTS 10
 
 #define DEBUG 1
@@ -41,7 +41,8 @@ Event ev_obstacle("obstacle_detected");
 
 // Useful stuff
 Object biggest_object;
-boolean objects_found = false;
+boolean biggest_object_found = false;
+boolean biggest_object_reached = false;
 Status current_status;
 int obstacle_detected_time = 0;
 
@@ -68,13 +69,13 @@ struct EvObjectFoundObserver : public EventTask
 		dim.toCharArray(dim_array, sizeof(dim_array)); //put readStringinto an array
 		float dimension = atof(dim_array);
 
-		if (objects_found) {
+		if (biggest_object_found) {
 		  if (biggest_object.dimension > dimension) {
 			  return;
 		  }
 		}
 
-		objects_found = true;
+		biggest_object_found = true;
 		biggest_object = Object(direction, dimension);
 
 	}
@@ -89,32 +90,44 @@ struct EvObstacleDetectedObserver : public EventTask
 	{
 		led_red.blink();
 
+		diff_motors.stop();
+
 		if (obstacle_detected_time == 0) obstacle_detected_time = millis();
 
-		if (current_status == scanning_objects) {
-			/* 	Quando c'è un ostacolo il flusso di controllo non torna al Radar, quindi lo scan
-			 * 	rimane in pausa. Se l'ostacolo rimane per più di 10 secondi, si abortisce lo scan
-			 * 	e ci si muove a caso per cercare di trovare una posizione migliore
-			 */
-			if (millis() - obstacle_detected_time > 10000){
+		if (millis() - obstacle_detected_time > 5000){
+			if (current_status == scanning_objects){
 				radar.abort_scan();
-				radar.set_position(90);
-				objects_found = false;
-				buzzer.warning_sound();
 			}
-		} else if (current_status == reaching_biggest_object) {
-			// bisogna controllare se è un semplice ostacolo oppure l'oggetto che stiamo cercando
-			// se è un ostacolo --> boh...ci giriamo? stiamo fermi in attesa che si tolga da solo?
-			// se è l'oggetto --> bisboccia!
+			biggest_object_found = false;
+			radar.set_position(90);
+			buzzer.warning_sound();
+		}
+
+		if (current_status == reaching_biggest_object) {
+			if (radar.distanceAtPosition_cm(90) <= TARGET_ACHIEVED){
+				biggest_object_reached = true;
+			}
 		} else if (current_status == random_movement) {
 			// bisogna controllare da che parte è possibile girarsi
+			float left_distance = radar.distanceAtPosition_cm(180);
+			float right_distance = radar.distanceAtPosition_cm(0);
+			if (left_distance > SAFE_DISTANCE || right_distance > SAFE_DISTANCE) {
+				if (left_distance > right_distance) {
+					diff_motors.turn(-90);
+				} else {
+					diff_motors.turn(90);
+				}
+			} else {
+				diff_motors.goBackward();
+			}
+
 		}
 	}
 
 } EvObstacleDetectedObserver;
 
 void checkObstacles(){
-	sei();
+	interrupts();
 
 	if (sonar.distance_cm() < SAFE_DISTANCE) {
 		Timer1.stop();
@@ -123,6 +136,8 @@ void checkObstacles(){
 	} else {
 		obstacle_detected_time = 0;
 	}
+
+	noInterrupts();
 }
 
 void setup()
@@ -153,6 +168,9 @@ void setup()
 
 void loop()
 {
+/*
+	biggest_object_found = false;
+	biggest_object_reached = false;
 
 	// led spenti
 	led_green.setOFF();
@@ -163,7 +181,7 @@ void loop()
 
 	radar.scan();
 
-	if (objects_found) {
+	if (biggest_object_found) {
 
 		current_status = reaching_biggest_object;
 
@@ -172,9 +190,12 @@ void loop()
 
 		// puntiamo l'oggetto
 		float big_obj_distance = radar.distanceAtPosition_cm((int)biggest_object.direction);
+		// cerchiamo di raggiungere l'oggetto trovato
+		reach_biggest_object(big_obj_distance, biggest_object.direction);
 
-		// andiamo verso l'oggetto
-		go_towards_object(big_obj_distance, biggest_object.direction);
+	}
+
+	if (biggest_object_found && biggest_object_reached) {
 
 		// festeggia!
 		buzzer.success_sound();
@@ -183,7 +204,7 @@ void loop()
 
 	} else {
 
-		// non è stato trovato alcun oggetto
+		// non è stato trovato o raggiunto alcun oggetto
 		led_red.setON();
 
 		buzzer.fail_sound();
@@ -192,6 +213,8 @@ void loop()
 
 	led_red.setON();
 	// muoviti a caso per un po' di passi (evitando gli ostacoli) per poi fare una nuova scansione
+*/
+	//buzzer.fail_sound();
 
 	current_status = random_movement;
 
@@ -201,133 +224,35 @@ void loop()
 
 }
 
-void go_towards_object(float obj_distance, int obj_direction)
+void reach_biggest_object(float obj_distance, int obj_direction)
 {
-	// ruota in direzione dell'oggetto più grande trovato
+	// ruota in direzione dell'oggetto più grande
 	int turn_angle = 90 - obj_direction;
-
 	diff_motors.turn(turn_angle);
 
-	float ahead_distance;
-	int stop;
-
-	while (sonar.distance_cm() > TARGET_ACHIEVED && obj_distance > TARGET_ACHIEVED) {
-
-		// controlliamo la distanza di fronte al robot
-		ahead_distance = radar.distanceAtPosition_cm(90);
-
-#ifdef DEBUG
-			Serial.print("Distanza di fronte al robot: ");
-			Serial.println(ahead_distance);
-#endif
-
-		float temp_distance;
-		stop = 0;
-
-		/*
-		 * 	fino a che la distanza di fronte al robot è maggiore
-		 * 	(considerando anche 5 cm di errore) a quella dell'oggetto
-		 * 	che abbiamo registrato girando il servo
-		 */
-		while (ahead_distance > obj_distance + ACCEPTED_ERROR &&
-				obj_distance > TARGET_ACHIEVED) {
-
-			// cerchiamo l'oggetto visto che non è davanti a noi
-			/*
-			 * turn_angle / 2 è per dare un'idicazione sulla direzione in cui
-			 * è più probabile che sia presente l'oggetto che cerchiamo, facendo
-			 * riferimento all'ultimo angolo di rotazione
-			 */
-			turn_angle = search_obj(obj_distance, turn_angle/2, 15);
-
-			buzzer.bip_sound();
-
-			// aggiorniamo la distanza dell'oggetto
-			temp_distance = radar.distanceAtPosition_cm(90 - turn_angle);
-			if (temp_distance < obj_distance + ACCEPTED_ERROR) obj_distance = temp_distance;
-
-			// ruotiamo verso l'oggetto
-			if (turn_angle < 10){
-				stop = 1;
-				turn_angle *= 1.5;
-			}
+	while(!biggest_object_reached && biggest_object_found){
+		while (radar.distanceAtPosition_cm(90) > obj_distance && abs(turn_angle) > 10) {
+			turn_angle = radar.checkObjectDirection(obj_distance, turn_angle/2, 15);
 			diff_motors.turn(turn_angle);
-
-#ifdef DEBUG
-			Serial.print(".Ho girato di: ");
-			Serial.println(turn_angle);
-#endif
-			// controlliamo la distanza davanti a noi
-			ahead_distance = radar.distanceAtPosition_cm(90);
-
-
-#ifdef DEBUG
-			Serial.print(".Distanza di fronte al robot: ");
-			Serial.println(ahead_distance);
-#endif
-
-			if (stop == 1) break;
 		}
-
-		if (obj_distance > TARGET_ACHIEVED){
-			// andiamo in avanti
-			turn_angle = 0;
-#ifdef DEBUG
-			Serial.print("Avanti tutta!");
-#endif
-			buzzer.bip_sound();
-			buzzer.warning_sound();
-			buzzer.bip_sound();
-			diff_motors.goForwardUntilTimeoutOrObstacle(250, sonar, SAFE_DISTANCE);
-		}
+		diff_motors.goForward();
+		delay(300);
+		diff_motors.stop();
 	}
-	diff_motors.stop();
-}
-
-int search_obj(float obj_distance, int estimated_direction, int wide)
-{
-	/*
-	 * estimated_direction indica la direzione verso cui è più
-	 * probabile che ci sia l'oggetto, è la metà dell'angolo
-	 * dell'ultima giro del robot, serve per evitare di fare una
-	 * scansione eccessiva ma guardare subito nella
-	 * direzione in cui dovrebbe esserci l'oggetto
-	 *
-	 */
-
-	buzzer.warning_sound();
-
-	int start = 0;
-	int end = 0;
-
-	start = (90 - estimated_direction) - wide;
-	end = (90 - estimated_direction) + wide;
-
-	if (start < 0) start = 0;
-	if (end > 180) end = 180;
-
-	float servo_distance;
-	int new_angle = -1;
-	for(int pos = start; pos < end; pos += 2) {
-		servo_distance = radar.distanceAtPosition_cm(pos);
-		if (servo_distance < obj_distance + ACCEPTED_ERROR){
-			new_angle = 90 - pos;
-			break;
-		}
-	}
-	if (new_angle == -1) search_obj(obj_distance, estimated_direction, wide + 10);
-	return new_angle;
 }
 
 void random_move_for(unsigned long milliseconds)
 {
+	int turn_choice = 20;
 	unsigned long start = millis();
 	float distance;
 	while (millis() < start + milliseconds) {
-		int choice = random(-3,4); // 0 -> avanti, -1 -> gira a sinistra, 1 -> gira a destra
-		Serial.println(choice);
-		if (abs(choice) == 3) {
-			choice = choice / 3;
+		int choice = random(-turn_choice,turn_choice+1); // 0,1,2 -> avanti, -5 -> gira a sinistra, 5 -> gira a destra
+		if (abs(choice) == turn_choice) {
+/*
+			diff_motors.stop();
+
+			choice = choice / 5;
 			int angle = 90 * choice;
 
 			distance = radar.distanceAtPosition_cm(90 - angle);
@@ -335,12 +260,14 @@ void random_move_for(unsigned long milliseconds)
 			if (distance > SAFE_DISTANCE){
 				diff_motors.turn(angle);
 			}
+*/
 		} else {
-
 			radar.set_position(90);
-			if (sonar.distance_cm() > SAFE_DISTANCE) {
-				diff_motors.goForwardUntilTimeoutOrObstacle(250, sonar, SAFE_DISTANCE);
-			}
+			diff_motors.goForward();
+			diff_motors.stop();
 		}
+
+
 	}
+	diff_motors.stop();
 }
