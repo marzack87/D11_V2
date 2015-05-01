@@ -41,10 +41,11 @@ Event ev_obstacle("obstacle_detected");
 
 // Useful stuff
 Object biggest_object;
-boolean biggest_object_found = false;
-boolean biggest_object_reached = false;
-Status current_status;
-int obstacle_detected_time = 0;
+volatile boolean biggest_object_found = false;
+volatile boolean biggest_object_reached = false;
+volatile boolean abort_mission = false;
+volatile Status current_status;
+volatile int obstacle_detected_time = 0;
 
 struct EvObjectFoundObserver : public EventTask
 {
@@ -88,23 +89,28 @@ struct EvObstacleDetectedObserver : public EventTask
 
 	void execute(Event evt)
 	{
-		led_red.blink();
-
 		diff_motors.stop();
 
-		if (obstacle_detected_time == 0) obstacle_detected_time = millis();
+		led_red.blink();
 
-		if (millis() - obstacle_detected_time > 5000){
+		if (obstacle_detected_time == 0){
+			obstacle_detected_time = millis();
+		} else if (millis() - obstacle_detected_time > 5000){
 			if (current_status == scanning_objects){
 				radar.abort_scan();
 			}
 			biggest_object_found = false;
+
+			abort_mission = true;
 			radar.set_position(90);
-			buzzer.warning_sound();
+			led_green.setOFF();
+			buzzer.fail_sound();
+
+			current_status = random_movement;
 		}
 
 		if (current_status == reaching_biggest_object) {
-			if (radar.distanceAtPosition_cm(90) <= TARGET_ACHIEVED){
+			if (radar.checkObjectReached(TARGET_ACHIEVED)){
 				biggest_object_reached = true;
 			}
 		} else if (current_status == random_movement) {
@@ -119,25 +125,24 @@ struct EvObstacleDetectedObserver : public EventTask
 				}
 			} else {
 				diff_motors.goBackward();
+				diff_motors.stop();
 			}
 
 		}
+
 	}
 
 } EvObstacleDetectedObserver;
 
 void checkObstacles(){
 	interrupts();
-
-	if (sonar.distance_cm() < SAFE_DISTANCE) {
+	if (sonar.distance_cm() < SAFE_DISTANCE && !biggest_object_reached) {
 		Timer1.stop();
 		evtManager.trigger(ev_obstacle);
 		Timer1.restart();
 	} else {
 		obstacle_detected_time = 0;
 	}
-
-	noInterrupts();
 }
 
 void setup()
@@ -168,9 +173,9 @@ void setup()
 
 void loop()
 {
-/*
 	biggest_object_found = false;
 	biggest_object_reached = false;
+	abort_mission = false;
 
 	// led spenti
 	led_green.setOFF();
@@ -202,10 +207,9 @@ void loop()
 
 		led_green.setOFF();
 
-	} else {
+	} else if (!abort_mission) {
 
 		// non è stato trovato o raggiunto alcun oggetto
-		led_red.setON();
 
 		buzzer.fail_sound();
 
@@ -213,8 +217,6 @@ void loop()
 
 	led_red.setON();
 	// muoviti a caso per un po' di passi (evitando gli ostacoli) per poi fare una nuova scansione
-*/
-	//buzzer.fail_sound();
 
 	current_status = random_movement;
 
@@ -243,16 +245,15 @@ void reach_biggest_object(float obj_distance, int obj_direction)
 
 void random_move_for(unsigned long milliseconds)
 {
+	biggest_object_reached = false;
 	int turn_choice = 20;
 	unsigned long start = millis();
 	float distance;
 	while (millis() < start + milliseconds) {
 		int choice = random(-turn_choice,turn_choice+1); // 0,1,2 -> avanti, -5 -> gira a sinistra, 5 -> gira a destra
 		if (abs(choice) == turn_choice) {
-/*
-			diff_motors.stop();
 
-			choice = choice / 5;
+			choice = choice / turn_choice;
 			int angle = 90 * choice;
 
 			distance = radar.distanceAtPosition_cm(90 - angle);
@@ -260,7 +261,7 @@ void random_move_for(unsigned long milliseconds)
 			if (distance > SAFE_DISTANCE){
 				diff_motors.turn(angle);
 			}
-*/
+
 		} else {
 			radar.set_position(90);
 			diff_motors.goForward();

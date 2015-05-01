@@ -37,15 +37,8 @@ enum Status {
 	random_movement
 };
 
-void go_until_obstacle();
-
-int ultrasonic_distance();
-
-int search_obj(float obj_distance, int last_turn_angle, int wide);
-void set_servo_position(int degree);
-void go_towards_object(float obj_distance, int obj_direction);
-float scan();
-
+void reach_biggest_object(float obj_distance, int obj_direction);
 void random_move_for(unsigned long milliseconds);
+
 //Do not add code below this line
 #endif /* D11_V2_H_ */
